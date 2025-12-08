@@ -1,5 +1,7 @@
 # 🐱 猫猫导航 (Mao Nav)
 
+原作者：(https://github.com/maodeyu180/mao_nav)
+
 ⭐ 如果这个项目对你有帮助，请给它一个 Star！
 
 > 一个简洁美观的个人导航网站，支持分类管理和自定义收藏夹
