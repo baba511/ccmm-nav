@@ -33,7 +33,7 @@
       <!-- Logo区域 -->
       <div class="logo-section">
         <img src="/logo.png" alt="logo" class="logo" />
-        <h1 class="site-title">{{ title || '猫猫导航' }}</h1>
+       <h1 class="site-title">{{ title || siteConfig.siteName }}</h1>
       </div>
 
       <!-- 分类导航 -->
@@ -186,13 +186,13 @@
           <footer class="page-footer" hidden="true">
             <div class="footer-content">
               <div class="footer-info">
-                <h3>{{ title || '猫猫导航' }}</h3>
+                <h3>{{ title || siteConfig.siteName }}</h3>
                 <p>一个简洁、美观的导航网站，收录优质网站资源</p>
               </div>
 
               <div class="footer-links">
                 <a
-                  href="https://github.com/maodeyu180/mao_nav"
+                 :href="siteConfig.githubUrl"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="footer-link"
@@ -206,8 +206,8 @@
             </div>
 
             <div class="footer-bottom">
-              <p>&copy; {{ new Date().getFullYear() }} 猫猫导航 - 由 <a href="https://github.com/maodeyu180" target="_blank" rel="noopener noreferrer">maodeyu180</a> 用 ❤️ 制作</p>
-              <p class="footer-tech">基于 Vue.js 构建 | <a href="https://github.com/maodeyu180/mao_nav" target="_blank" rel="noopener noreferrer">查看源代码</a></p>
+              <p>&copy; {{ new Date().getFullYear() }} {{ siteConfig.siteName }} - 由 <a :href="`https://github.com/${siteConfig.githubAuthor}`"
+              <p class="footer-tech">基于 Vue.js 构建 | <a :href="siteConfig.githubUrl"
             </div>
           </footer>
         </div>
@@ -215,6 +215,11 @@
     </main>
   </div>
 </template>
+
+import { getSiteConfig } from '@/config/site.js'
+
+// 获取网站配置
+const siteConfig = getSiteConfig()
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
@@ -327,17 +332,15 @@ const scrollToCategory = (categoryId) => {
 
 // 检查是否启用锁定功能
 const checkLockStatus = () => {
-  const openLock = import.meta.env.VITE_OPEN_LOCK
-  if (openLock && openLock.trim() !== '') {
+  if (siteConfig.enableLock) {  // 使用配置
     isLocked.value = true
-    // 检查是否已经解锁过
     const savedUnlock = localStorage.getItem('nav_unlocked')
     if (savedUnlock === 'true') {
       isUnlocked.value = true
     }
   } else {
     isLocked.value = false
-    isUnlocked.value = true // 如果没有启用锁定，默认为解锁状态
+    isUnlocked.value = true
   }
 }
 
@@ -346,20 +349,18 @@ const handleUnlock = async () => {
   unlocking.value = true
   unlockError.value = ''
 
-    try {
-    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD
-
-    if (!adminPassword) {
+  try {
+    if (!siteConfig.adminPassword) {  // 使用配置
       throw new Error('访问密钥未配置')
     }
 
-    if (unlockPassword.value === adminPassword) {
+    if (unlockPassword.value === siteConfig.adminPassword) {  // 使用配置
       isUnlocked.value = true
       localStorage.setItem('nav_unlocked', 'true')
       unlockPassword.value = ''
       console.log('导航站解锁成功')
     } else {
-      throw new Error('访问密钥错误，请重新输入')
+      throw new Error('访问密钥错误,请重新输入')
     }
   } catch (error) {
     unlockError.value = error.message
@@ -413,7 +414,7 @@ const scrollToCategoryMobile = (categoryId) => {
 
 // 打开GitHub项目页面
 const openGitHub = () => {
-  window.open('https://github.com/maodeyu180/mao_nav', '_blank')
+  window.open(siteConfig.githubUrl, '_blank')  // 使用配置
 }
 
 // 组件挂载时获取数据
