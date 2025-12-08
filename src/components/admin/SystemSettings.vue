@@ -58,7 +58,7 @@
               {{ titleSaving ? '保存中...' : '💾 保存标题' }}
             </button>
           </div>
-          <p class="setting-description">当前标题: {{ currentTitle || '未设置' }}</p>
+          <p class="setting-description">当前标题: {{ currentTitle || '未设置' }} <span v-if="envConfig.siteTitle" class="env-override-tip">(已被环境变量覆盖)</span></p>
         </div>
 
         <!-- 默认搜索引擎设置 -->
@@ -90,6 +90,7 @@
           <label>网站Logo:</label>
           <div class="logo-upload-area">
             <div class="logo-preview">
+              <!-- 优先显示预览（用户刚选的），其次显示当前Logo（加时间戳防缓存） -->
               <img
                 v-if="logoPreview"
                 :src="logoPreview"
@@ -97,15 +98,12 @@
                 class="logo-preview-img"
               >
               <img
-                v-else-if="currentLogo"
-                :src="currentLogo"
+                v-else
+                :src="logoUrlWithTimestamp"
                 alt="当前Logo"
                 class="logo-preview-img"
+                @error="handleLogoError"
               >
-              <div v-else class="logo-placeholder">
-                <span>🖼️</span>
-                <p>暂无Logo</p>
-              </div>
             </div>
             <div class="logo-upload-controls">
               <input
@@ -128,7 +126,7 @@
               </button>
             </div>
           </div>
-          <p class="setting-description">仅支持PNG格式，建议尺寸: 128x128px</p>
+          <p class="setting-description">仅支持PNG格式，建议尺寸: 128x128px。<br>⚠️ <strong>注意：</strong> Logo属于静态资源，上传成功后需要等待 <strong>2-3分钟</strong> 自动部署完成才会生效。如果显示旧图片，请尝试强制刷新浏览器。</p>
         </div>
       </div>
     </div>
@@ -137,6 +135,7 @@
     <div class="settings-section">
       <h3>🌍 环境变量配置</h3>
       <div class="env-config">
+        <!-- 基础配置 -->
         <div class="config-item">
           <label>管理员密钥 (VITE_ADMIN_PASSWORD):</label>
           <div class="config-value">
@@ -151,6 +150,32 @@
             <span v-else class="value-missing">❌ 未配置</span>
           </div>
         </div>
+        
+        <!-- 个性化配置 (新增) -->
+        <div class="config-item">
+          <label>自定义网站标题 (VITE_SITE_TITLE):</label>
+          <div class="config-value">
+            <span v-if="envConfig.siteTitle" class="value-display">{{ envConfig.siteTitle }}</span>
+            <span v-else class="value-default">默认 (读取配置)</span>
+          </div>
+        </div>
+        <div class="config-item">
+          <label>自定义后台标题 (VITE_ADMIN_TITLE):</label>
+          <div class="config-value">
+            <span v-if="envConfig.adminTitle" class="value-display">{{ envConfig.adminTitle }}</span>
+            <span v-else class="value-default">默认 (导航站管理)</span>
+          </div>
+        </div>
+        <div class="config-item">
+          <label>前台访问锁定 (VITE_OPEN_LOCK):</label>
+          <div class="config-value">
+            <span v-if="envConfig.openLock === 'true'" class="value-set">🔒 已开启</span>
+            <span v-else class="value-default">🔓 未开启</span>
+          </div>
+        </div>
+
+        <!-- 仓库配置 -->
+        <div class="config-divider"></div>
         <div class="config-item">
           <label>GitHub 仓库所有者 (VITE_GITHUB_OWNER):</label>
           <div class="config-value">
@@ -168,72 +193,6 @@
           <div class="config-value">
             <span class="value-display">{{ envConfig.githubBranch || '默认: master' }}</span>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 配置说明 -->
-    <div class="settings-section">
-      <h3>📖 配置说明</h3>
-      <div class="config-guide">
-        <div class="guide-step">
-          <h4>1. 获取 GitHub Personal Access Token</h4>
-          <ol>
-            <li>访问 <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer">GitHub Settings → Developer settings → Personal access tokens</a></li>
-            <li>点击 "Generate new token" → "Generate new token (fine-grained token)"</li>
-            <li>设置 Token 名称，选择过期时间,仓库只选择mao_nav 防止token 泄露影响自己其他工程</li>
-            <li>
-              <strong>在 <span style="color:#3498db">Repository permissions (仓库权限)</span> 部分，勾选以下权限：</strong>
-              <ul>
-                <li>
-                  <code>Contents</code> - <strong>Read and write</strong> ✅<br>
-                  <span style="color:#888;font-size:13px;">用于读取和修改 <code>src/mock/mock_data.js</code> 文件，这是管理系统的核心功能</span>
-                </li>
-                <li>
-                  <code>Metadata</code> - <strong>Read</strong> ✅<br>
-                  <span style="color:#888;font-size:13px;">用于访问仓库基本信息，GitHub API 的基础权限</span>
-                </li>
-              </ul>
-              <div style="margin-top:8px;">
-                <strong>在 <span style="color:#f39c12">Account permissions (账户权限)</span> 部分：</strong><br>
-                <span style="color:#888;font-size:13px;">不需要勾选任何账户权限 ❌，我们只操作特定仓库，不需要账户级别的权限</span>
-              </div>
-            </li>
-            <li>点击 "Generate token" 并复制 Token</li>
-          </ol>
-        </div>
-
-        <div class="guide-step">
-          <h4>2. 配置环境变量</h4>
-          <p>
-            <strong>如果你在 <span style="color:#3498db">自己的服务器</span> 部署：</strong><br>
-            在项目根目录创建 <code>.env</code> 文件，添加以下配置：
-          </p>
-          <p>
-            <strong>如果你使用 <span style="color:#27ae60">Vercel</span> 或 <span style="color:#f39c12">Cloudflare Pages</span> 部署：</strong><br>
-            请在对应平台的「环境变量」设置界面，添加下方这些变量，无需在项目中创建 <code>.env</code> 文件。
-          </p>
-          <div class="code-block">
-            <pre><code># 管理员密钥（自定义）
-VITE_ADMIN_PASSWORD=your_admin_password_here
-
-# GitHub Token
-VITE_GITHUB_TOKEN=your_github_token_here
-# Github 仓库所有者
-VITE_GITHUB_OWNER=your_github_owner_here
-VITE_GITHUB_REPO=your_github_repo_here
-VITE_GITHUB_BRANCH=your_github_branch_here</code></pre>
-          </div>
-        </div>
-
-        <div class="guide-step">
-          <h4>3. 安全注意事项</h4>
-          <ul>
-            <li>🔒 <strong>不要</strong>将 <code>.env</code> 文件提交到 Git 仓库</li>
-            <li>🔑 GitHub Token 具有写入权限，请妥善保管</li>
-            <li>🚫 定期更新和轮换 Token</li>
-            <li>📝 在生产环境中，建议使用更安全的密钥管理方案</li>
-          </ul>
         </div>
       </div>
     </div>
@@ -277,7 +236,7 @@ VITE_GITHUB_BRANCH=your_github_branch_here</code></pre>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useGitHubAPI } from '../../apis/useGitHubAPI.js'
 import CustomDialog from './CustomDialog.vue'
 
@@ -293,7 +252,10 @@ const envConfig = ref({
   githubToken: '',
   githubOwner: '',
   githubRepo: '',
-  githubBranch: ''
+  githubBranch: '',
+  siteTitle: '',
+  adminTitle: '',
+  openLock: ''
 })
 
 // 系统信息
@@ -325,8 +287,13 @@ const searchEngineOptions = [
 const logoFileInput = ref(null)
 const selectedLogoFile = ref(null)
 const logoPreview = ref('')
-const currentLogo = ref('/logo.png')
+const logoUpdateTimestamp = ref(Date.now()) // 用于强制刷新Logo缓存
 const logoSaving = ref(false)
+
+// 计算属性：带时间戳的Logo URL，防止缓存
+const logoUrlWithTimestamp = computed(() => {
+  return `/logo.png?t=${logoUpdateTimestamp.value}`
+})
 
 // 自定义弹框状态
 const dialogVisible = ref(false)
@@ -371,7 +338,11 @@ const checkEnvConfig = () => {
     githubToken: import.meta.env.VITE_GITHUB_TOKEN ? '***' : '',
     githubOwner: import.meta.env.VITE_GITHUB_OWNER || '',
     githubRepo: import.meta.env.VITE_GITHUB_REPO || '',
-    githubBranch: import.meta.env.VITE_GITHUB_BRANCH || ''
+    githubBranch: import.meta.env.VITE_GITHUB_BRANCH || '',
+    // 新增的环境变量
+    siteTitle: import.meta.env.VITE_SITE_TITLE || '',
+    adminTitle: import.meta.env.VITE_ADMIN_TITLE || '',
+    openLock: import.meta.env.VITE_OPEN_LOCK || ''
   }
 }
 
@@ -434,7 +405,7 @@ const saveTitleToGitHub = async () => {
       [
         '• 更改将在 2-3 分钟内自动部署到线上',
         '• 部署完成后，您可以在前台页面看到最新标题',
-        '• 如有问题，请检查Vercel或CFpage是否触发自动部署'
+        '• 注意：如果配置了 VITE_SITE_TITLE 环境变量，环境变量优先级更高'
       ]
     )
   } catch (error) {
@@ -529,6 +500,17 @@ const handleLogoSelect = (event) => {
   reader.readAsDataURL(file)
 }
 
+// 处理Logo加载错误
+const handleLogoError = (e) => {
+  // 如果加载失败，尝试不带参数加载或者显示默认占位符
+  if (e.target.src.includes('?')) {
+    e.target.src = '/logo.png'
+  } else {
+    // 最后的兜底
+    e.target.style.display = 'none'
+  }
+}
+
 // 保存Logo到GitHub
 const saveLogoToGitHub = async () => {
   if (!selectedLogoFile.value) {
@@ -552,22 +534,22 @@ const saveLogoToGitHub = async () => {
 
     await uploadBinaryFile(githubPath, arrayBuffer, message)
 
-    // 更新当前Logo显示
-    currentLogo.value = logoPreview.value
+    // 更新时间戳，尝试强制刷新图片
+    logoUpdateTimestamp.value = Date.now()
 
     // 清理选择的文件
     selectedLogoFile.value = null
-    logoPreview.value = ''
+    logoPreview.value = '' // 清除预览，使用真实的带时间戳的URL
     logoFileInput.value.value = ''
 
     showDialog(
       'success',
       '🎉 Logo上传成功',
-      '您的网站Logo已成功保存到GitHub仓库！',
+      'Logo已推送至GitHub，正在等待部署生效',
       [
-        '• 更改将在 2-3 分钟内自动部署到线上',
-        '• 部署完成后，刷新页面即可看到新Logo',
-        '• 如有问题，请检查Vercel或CFpage是否触发自动部署'
+        '• ⚠️ 重要：Logo变化不会立即生效！',
+        '• 需要等待Cloudflare/Vercel重新构建（约2-3分钟）',
+        '• 部署完成后，请强制刷新浏览器(Ctrl+F5)查看'
       ]
     )
   } catch (error) {
@@ -734,6 +716,12 @@ onMounted(() => {
   border: 1px solid #e9ecef;
 }
 
+.config-divider {
+  height: 1px;
+  background: #e9ecef;
+  margin: 5px 0;
+}
+
 .config-item label {
   font-weight: 500;
   color: #2c3e50;
@@ -757,11 +745,18 @@ onMounted(() => {
 }
 
 .value-display {
-  color: #7f8c8d;
-  font-family: monospace;
-  background: #f8f9fa;
+  color: #2c3e50;
+  font-weight: 500;
+  background: #f1f3f5;
   padding: 4px 8px;
   border-radius: 4px;
+  font-size: 13px;
+  font-family: monospace;
+}
+
+.value-default {
+  color: #adb5bd;
+  font-style: italic;
   font-size: 13px;
 }
 
@@ -900,6 +895,12 @@ onMounted(() => {
   color: #7f8c8d;
   font-size: 13px;
   margin: 5px 0 0 0;
+}
+
+.env-override-tip {
+  color: #e67e22;
+  margin-left: 5px;
+  font-weight: 500;
 }
 
 /* 标题设置样式 */
