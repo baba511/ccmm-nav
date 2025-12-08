@@ -193,8 +193,7 @@ npm run dev
 
 ### 项目结构
 
-
-
+mao_nav/
 ├── src/
 │   ├── apis/           # GitHub API 交互逻辑
 │   ├── assets/         # 静态资源
@@ -211,9 +210,6 @@ npm run dev
 ├── package.json       # 项目配置
 ├── vite.config.js     # Vite 配置
 └── wrangler.toml      # Cloudflare 部署配置
-
-
-
 
 
 
