@@ -31,7 +31,7 @@
       <!-- 顶部导航 -->
       <header class="admin-header">
         <div class="header-content">
-          <h1>🛠️ 导航站管理</h1>
+          <h1>🛠️ {{ siteConfig.siteName }}管理</h1>
           <div class="header-actions">
             <button @click="emergencyReset" class="emergency-btn" hidden="true">🚨 紧急重置</button>
             <button @click="debugLoadData" class="debug-btn" hidden="true">🔍 调试加载</button>
