@@ -1,3 +1,5 @@
+--- START OF FILE mao_nav-master/src/views/NavHomeView.vue ---
+
 <template>
   <!-- 锁定界面 -->
   <div v-if="isLocked && !isUnlocked" class="lock-container">
@@ -33,7 +35,7 @@
       <!-- Logo区域 -->
       <div class="logo-section">
         <img src="/logo.png" alt="logo" class="logo" />
-       <h1 class="site-title">{{ title || siteConfig.siteName }}</h1>
+        <h1 class="site-title">{{ displayTitle }}</h1>
       </div>
 
       <!-- 分类导航 -->
@@ -186,13 +188,13 @@
           <footer class="page-footer" hidden="true">
             <div class="footer-content">
               <div class="footer-info">
-                <h3>{{ title || siteConfig.siteName }}</h3>
+                <h3>{{ displayTitle }}</h3>
                 <p>一个简洁、美观的导航网站，收录优质网站资源</p>
               </div>
 
               <div class="footer-links">
                 <a
-                 :href="siteConfig.githubUrl"
+                  href="https://github.com/maodeyu180/mao_nav"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="footer-link"
@@ -206,9 +208,9 @@
             </div>
 
             <div class="footer-bottom">
-                 <p>&copy; {{ new Date().getFullYear() }} {{ siteConfig.siteName }} - 由 <a :href="'https://github.com/' + siteConfig.githubAuthor" target="_blank">{{ siteConfig.githubAuthor }}</a> 创建</p>
-                 <p class="footer-tech">基于 Vue.js 构建 | <a href="https://github.com/maodeyu180/mao_nav" target="_blank">开源项目</a></p>
-             </div>
+              <p>&copy; {{ new Date().getFullYear() }} {{ displayTitle }} - 由 <a href="https://github.com/maodeyu180" target="_blank" rel="noopener noreferrer">maodeyu180</a> 用 ❤️ 制作</p>
+              <p class="footer-tech">基于 Vue.js 构建 | <a href="https://github.com/maodeyu180/mao_nav" target="_blank" rel="noopener noreferrer">查看源代码</a></p>
+            </div>
           </footer>
         </div>
       </div>
@@ -216,13 +218,8 @@
   </div>
 </template>
 
-import { getSiteConfig } from '@/config/site.js'
-
-// 获取网站配置
-const siteConfig = getSiteConfig()
-
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useNavigation } from '@/apis/useNavigation.js'
 import { useThemeStore } from '@/stores/counter.js'
 // 导入搜索引擎logo图片
@@ -250,6 +247,17 @@ const isUnlocked = ref(false) // 是否已解锁
 const unlockPassword = ref('') // 解锁密码输入
 const unlocking = ref(false) // 解锁中状态
 const unlockError = ref('') // 解锁错误信息
+
+// 计算显示的标题：优先使用环境变量，否则使用接口返回的标题，最后兜底
+const envSiteTitle = import.meta.env.VITE_SITE_TITLE
+const displayTitle = computed(() => {
+  return envSiteTitle || title.value || '猫猫导航'
+})
+
+// 监听标题变化动态更新 document.title
+watch(displayTitle, (newTitle) => {
+  document.title = newTitle
+}, { immediate: true })
 
 // 搜索引擎配置
 const searchEngines = {
@@ -332,15 +340,17 @@ const scrollToCategory = (categoryId) => {
 
 // 检查是否启用锁定功能
 const checkLockStatus = () => {
-  if (siteConfig.enableLock) {  // 使用配置
+  const openLock = import.meta.env.VITE_OPEN_LOCK
+  if (openLock && openLock.trim() !== '') {
     isLocked.value = true
+    // 检查是否已经解锁过
     const savedUnlock = localStorage.getItem('nav_unlocked')
     if (savedUnlock === 'true') {
       isUnlocked.value = true
     }
   } else {
     isLocked.value = false
-    isUnlocked.value = true
+    isUnlocked.value = true // 如果没有启用锁定，默认为解锁状态
   }
 }
 
@@ -349,18 +359,20 @@ const handleUnlock = async () => {
   unlocking.value = true
   unlockError.value = ''
 
-  try {
-    if (!siteConfig.adminPassword) {  // 使用配置
+    try {
+    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD
+
+    if (!adminPassword) {
       throw new Error('访问密钥未配置')
     }
 
-    if (unlockPassword.value === siteConfig.adminPassword) {  // 使用配置
+    if (unlockPassword.value === adminPassword) {
       isUnlocked.value = true
       localStorage.setItem('nav_unlocked', 'true')
       unlockPassword.value = ''
       console.log('导航站解锁成功')
     } else {
-      throw new Error('访问密钥错误,请重新输入')
+      throw new Error('访问密钥错误，请重新输入')
     }
   } catch (error) {
     unlockError.value = error.message
@@ -414,7 +426,7 @@ const scrollToCategoryMobile = (categoryId) => {
 
 // 打开GitHub项目页面
 const openGitHub = () => {
-  window.open(siteConfig.githubUrl, '_blank')  // 使用配置
+  window.open('https://github.com/maodeyu180/mao_nav', '_blank')
 }
 
 // 组件挂载时获取数据
@@ -1480,3 +1492,879 @@ onUnmounted(() => {
   box-shadow: 0 10px 30px rgba(59, 130, 246, 0.4);
 }
 </style>
+--- START OF FILE mao_nav-master/src/views/AdminView.vue ---
+
+<template>
+  <div class="admin-container">
+    <!-- 登录界面 -->
+    <div v-if="!isAuthenticated" class="login-container">
+      <div class="login-box">
+        <h1>🔐 管理员登录</h1>
+        <form @submit.prevent="handleLogin">
+          <div class="form-group">
+            <label for="password">管理密钥:</label>
+            <input
+              id="password"
+              type="password"
+              v-model="loginPassword"
+              placeholder="请输入管理密钥"
+              required
+              class="form-input"
+            />
+          </div>
+          <button type="submit" class="login-btn" :disabled="loading">
+            {{ loading ? '验证中...' : '登录' }}
+          </button>
+        </form>
+        <div v-if="loginError" class="error-message">
+          {{ loginError }}
+        </div>
+      </div>
+    </div>
+
+    <!-- 管理界面 -->
+    <div v-else class="admin-dashboard">
+      <!-- 顶部导航 -->
+      <header class="admin-header">
+        <div class="header-content">
+          <h1>🛠️ {{ adminTitle }}</h1>
+          <div class="header-actions">
+            <button @click="emergencyReset" class="emergency-btn" hidden="true">🚨 紧急重置</button>
+            <button @click="debugLoadData" class="debug-btn" hidden="true">🔍 调试加载</button>
+            <span class="user-info">管理员</span>
+            <button @click="logout" class="logout-btn">退出</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- 主要内容 -->
+      <main class="admin-main">
+        <!-- 加载状态显示 -->
+        <div v-if="loading" class="loading-overlay">
+          <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p>正在加载数据...</p>
+            <button @click="skipLoading" class="skip-loading-btn">跳过加载</button>
+          </div>
+        </div>
+
+        <div class="admin-tabs">
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'categories' }"
+            @click="activeTab = 'categories'"
+          >
+            📁 分类管理
+          </button>
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'sites' }"
+            @click="switchToSiteTab"
+          >
+            🌐 站点管理
+          </button>
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'settings' }"
+            @click="activeTab = 'settings'"
+          >
+            ⚙️ 系统设置
+          </button>
+        </div>
+
+        <!-- 分类管理 -->
+        <div v-if="activeTab === 'categories'" class="tab-content">
+          <CategoryManager
+            :categories="categories"
+            @update="handleCategoriesUpdate"
+            @save="saveToGitHub"
+            @viewSites="switchToSiteManager"
+            :loading="saving"
+          />
+        </div>
+
+        <!-- 站点管理 -->
+        <div v-if="activeTab === 'sites'" class="tab-content">
+          <SiteManager
+            :categories="categories"
+            :initialSelectedCategoryId="selectedCategoryId"
+            @update="handleCategoriesUpdate"
+            @save="saveToGitHub"
+            :loading="saving"
+          />
+        </div>
+
+        <!-- 系统设置 -->
+        <div v-if="activeTab === 'settings'" class="tab-content">
+          <SystemSettings />
+        </div>
+      </main>
+    </div>
+
+    <!-- 自定义弹框 -->
+    <CustomDialog
+      :visible="dialogVisible"
+      :type="dialogType"
+      :title="dialogTitle"
+      :message="dialogMessage"
+      :details="dialogDetails"
+      @close="closeDialog"
+      @confirm="closeDialog"
+    />
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import CategoryManager from '../components/admin/CategoryManager.vue'
+import SiteManager from '../components/admin/SiteManager.vue'
+import SystemSettings from '../components/admin/SystemSettings.vue'
+import CustomDialog from '../components/admin/CustomDialog.vue'
+import { useGitHubAPI } from '../apis/useGitHubAPI.js'
+
+const router = useRouter()
+const { saveCategoriesToGitHub, loadCategoriesFromGitHub } = useGitHubAPI()
+
+// 认证状态
+const isAuthenticated = ref(false)
+const loginPassword = ref('')
+const loginError = ref('')
+const loading = ref(false)
+const saving = ref(false)
+
+// 管理界面状态
+const activeTab = ref('categories')
+const categories = ref([])
+const navTitle = ref('猫猫导航') // 保存网站标题
+const selectedCategoryId = ref('') // 用于站点管理的选中分类
+
+// 环境变量配置的标题
+const adminTitle = import.meta.env.VITE_ADMIN_TITLE || '导航站管理'
+const envSiteTitle = import.meta.env.VITE_SITE_TITLE
+
+// 紧急兜底：如果5秒后loading还是true，强制重置
+setTimeout(() => {
+  if (loading.value) {
+    console.warn('检测到loading状态异常，强制重置')
+    loading.value = false
+    // 确保至少有基本数据
+    if (categories.value.length === 0) {
+      categories.value = [
+        {
+          id: 'default',
+          name: '默认分类',
+          icon: '📁',
+          order: 0,
+          sites: []
+        }
+      ]
+    }
+  }
+}, 5000)
+
+// 自定义弹框状态
+const dialogVisible = ref(false)
+const dialogType = ref('success')
+const dialogTitle = ref('')
+const dialogMessage = ref('')
+const dialogDetails = ref([])
+
+// 更新浏览器标题
+const updateDocTitle = () => {
+  const t = envSiteTitle || navTitle.value || '猫猫导航'
+  document.title = `${adminTitle} - ${t}`
+}
+
+// 验证管理员密钥
+const handleLogin = async () => {
+  loading.value = true
+  loginError.value = ''
+
+  try {
+    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD
+    if (!adminPassword) {
+      throw new Error('管理密钥未配置，请配置环境变量')
+    }
+
+    if (loginPassword.value === adminPassword) {
+      isAuthenticated.value = true
+      localStorage.setItem('admin_authenticated', 'true')
+
+      // 登录成功后，不立即加载数据，让用户进入管理界面
+      console.log('登录成功，准备进入管理界面')
+
+      // 延迟加载，避免阻塞登录流程
+      setTimeout(async () => {
+        try {
+          await loadCategories()
+        } catch (error) {
+          console.error('登录后数据加载失败:', error)
+          loading.value = false
+        }
+      }, 500)
+    } else {
+      throw new Error('密钥错误，请重新输入')
+    }
+  } catch (error) {
+    loginError.value = error.message
+  } finally {
+    // 确保登录流程的loading状态被重置
+    if (!isAuthenticated.value) {
+      loading.value = false
+    }
+  }
+}
+
+// 退出登录
+const logout = () => {
+  isAuthenticated.value = false
+  localStorage.removeItem('admin_authenticated')
+  loginPassword.value = ''
+  router.push('/')
+}
+
+// 调试加载数据
+const debugLoadData = async () => {
+  console.log('=== 开始调试加载数据 ===')
+  console.log('当前环境变量:', {
+    VITE_GITHUB_TOKEN: import.meta.env.VITE_GITHUB_TOKEN ? '已配置' : '未配置',
+    VITE_GITHUB_OWNER: import.meta.env.VITE_GITHUB_OWNER,
+    VITE_GITHUB_REPO: import.meta.env.VITE_GITHUB_REPO,
+    VITE_GITHUB_BRANCH: import.meta.env.VITE_GITHUB_BRANCH
+  })
+
+  try {
+    console.log('直接调用loadCategoriesFromGitHub...')
+    const data = await loadCategoriesFromGitHub()
+    console.log('调用成功，返回数据:', data)
+
+    showDialog(
+      'success',
+      '🎉 调试成功',
+      '直接调用GitHub API成功',
+      [`• 数据类型: ${typeof data}`, `• 包含categories: ${!!data.categories}`, `• 分类数量: ${data.categories?.length || 0}`]
+    )
+  } catch (error) {
+    console.error('直接调用失败:', error)
+    showDialog(
+      'error',
+      '❌ 调试失败',
+      '直接调用GitHub API失败',
+      [`• 错误信息: ${error.message}`, `• 错误类型: ${error.constructor.name}`]
+    )
+  }
+}
+
+// 加载分类数据（简化版本，暂时只加载本地数据）
+const loadCategories = async () => {
+  console.log('🔍 开始加载分类数据（简化版本）')
+  loading.value = true
+
+  try {
+    // 直接加载本地数据，避免GitHub API调用
+    const { mockData } = await import('../mock/mock_data.js')
+    categories.value = mockData.categories || []
+    navTitle.value = mockData.title || '猫猫导航'
+    updateDocTitle() // 加载数据后更新标题
+    console.log('✅ 本地数据加载成功，分类数量:', categories.value.length)
+  } catch (error) {
+    console.error('❌ 本地数据加载失败:', error)
+    // 最后兜底：使用空数组
+    categories.value = []
+    navTitle.value = '猫猫导航'
+    updateDocTitle()
+  } finally {
+    // 确保loading状态被重置
+    loading.value = false
+    console.log('🔍 数据加载完成，loading状态重置')
+  }
+}
+
+// 处理分类更新
+const handleCategoriesUpdate = (newCategories) => {
+  categories.value = newCategories
+}
+
+// 切换到站点管理并选中对应分类
+const switchToSiteManager = (categoryId) => {
+  selectedCategoryId.value = categoryId
+  activeTab.value = 'sites'
+}
+
+// 手动切换到站点管理标签
+const switchToSiteTab = () => {
+  selectedCategoryId.value = '' // 清空选中分类，显示所有站点
+  activeTab.value = 'sites'
+}
+
+// 显示弹框
+const showDialog = (type, title, message, details = []) => {
+  dialogType.value = type
+  dialogTitle.value = title
+  dialogMessage.value = message
+  dialogDetails.value = details
+  dialogVisible.value = true
+}
+
+// 关闭弹框
+const closeDialog = () => {
+  dialogVisible.value = false
+}
+
+// 跳过加载
+const skipLoading = async () => {
+  console.log('用户选择跳过加载')
+  loading.value = false
+
+  // 尝试加载本地数据
+  try {
+    const { mockData } = await import('../mock/mock_data.js')
+    categories.value = mockData.categories || []
+    navTitle.value = mockData.title || '猫猫导航'
+    updateDocTitle()
+    console.log('跳过加载后，使用本地数据:', categories.value.length)
+  } catch (error) {
+    console.error('跳过加载时，本地数据加载失败:', error)
+    // 最基本的兜底数据
+    categories.value = [
+      {
+        id: 'default',
+        name: '默认分类',
+        icon: '📁',
+        order: 0,
+        sites: []
+      }
+    ]
+    navTitle.value = '猫猫导航'
+    updateDocTitle()
+  }
+
+  showDialog(
+    'info',
+    '⏭️ 已跳过加载',
+    '已跳过GitHub数据加载，当前使用本地数据',
+    [`• 分类数量: ${categories.value.length}`, `• 可在系统设置中重新尝试连接GitHub`]
+  )
+}
+
+// 保存到GitHub
+const saveToGitHub = async () => {
+  saving.value = true
+  try {
+    // 保存完整的数据结构，包括title字段
+    await saveCategoriesToGitHub({
+      categories: categories.value,
+      title: navTitle.value
+    })
+    showDialog(
+      'success',
+      '🎉 保存成功',
+      '您的更改已成功保存到GitHub仓库！',
+      [
+        '• 更改将在 2-3 分钟内自动部署到线上',
+        '• 部署完成后，您可以在前台页面看到最新内容',
+        '• 如有问题，请检查Vercel或CFpage是否触发自动部署'
+      ]
+    )
+  } catch (error) {
+    showDialog(
+      'error',
+      '❌ 保存失败',
+      '保存过程中发生错误，请重试',
+      [`• 错误详情: ${error.message}`]
+    )
+  } finally {
+    saving.value = false
+  }
+}
+
+// 紧急重置加载状态
+const emergencyReset = () => {
+  console.log('用户点击紧急重置按钮，强制重置loading状态')
+  loading.value = false
+  // 强制DOM更新，确保loading状态同步到模板
+  setTimeout(() => {
+    console.log('🔍 延迟检查loading状态:', loading.value)
+    console.log('🔍 DOM中loading元素:', document.querySelector('.loading-overlay'))
+    console.log('🔍 DOM中tab按钮:', document.querySelectorAll('.tab-btn'))
+
+    // 如果loading overlay仍然存在，强制隐藏
+    const loadingOverlay = document.querySelector('.loading-overlay')
+    if (loadingOverlay) {
+      console.warn('🔍 发现loading overlay仍然存在，强制隐藏')
+      loadingOverlay.style.display = 'none'
+    }
+  }, 100)
+  showDialog(
+    'info',
+    '⚠️ 加载状态已重置',
+    '已强制重置加载状态，请刷新页面查看效果。',
+    []
+  )
+}
+
+// 组件挂载时检查认证状态
+onMounted(() => {
+  console.log('🔍 AdminView组件开始挂载')
+  
+  // 初始设置标题
+  updateDocTitle()
+
+  // 立即强制重置loading状态，避免卡死
+  loading.value = false
+
+  const savedAuth = localStorage.getItem('admin_authenticated')
+  if (savedAuth === 'true') {
+    console.log('🔍 检测到已登录状态')
+    isAuthenticated.value = true
+
+    // 直接使用本地数据，不调用GitHub API
+    console.log('🔍 直接加载本地数据，跳过GitHub API调用')
+    try {
+      // 使用同步方式加载本地数据
+      import('../mock/mock_data.js').then(({ mockData }) => {
+        categories.value = mockData.categories || []
+        navTitle.value = mockData.title || '猫猫导航'
+        updateDocTitle() // 加载数据后更新标题
+        console.log('🔍 本地数据加载成功，分类数量:', categories.value.length)
+      }).catch(error => {
+        console.error('🔍 本地数据加载失败:', error)
+        categories.value = []
+        navTitle.value = '猫猫导航'
+        updateDocTitle()
+      })
+    } catch (error) {
+      console.error('🔍 数据加载异常:', error)
+      categories.value = []
+      navTitle.value = '猫猫导航'
+      updateDocTitle()
+    }
+  }
+
+  console.log('🔍 AdminView组件挂载完成')
+})
+</script>
+
+<style scoped>
+.admin-container {
+  min-height: 100vh;
+  background: #2c3e50;
+}
+
+/* 登录界面样式 */
+.login-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.login-box {
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-box h1 {
+  text-align: center;
+  margin-bottom: 30px;
+  color: #2c3e50;
+  font-size: 24px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #555;
+  font-weight: 500;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e1e1e1;
+  border-radius: 6px;
+  font-size: 16px;
+  transition: border-color 0.3s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.login-btn {
+  width: 100%;
+  padding: 12px;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.login-btn:hover:not(:disabled) {
+  background: #2980b9;
+}
+
+.login-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+}
+
+.error-message {
+  margin-top: 15px;
+  padding: 10px;
+  background: #ffebee;
+  color: #c62828;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 14px;
+}
+
+/* 管理界面样式 */
+.admin-dashboard {
+  min-height: 100vh;
+  background: #f5f7fa;
+}
+
+.admin-header {
+  background: white;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 30px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header-content h1 {
+  color: #2c3e50;
+  margin: 0;
+  font-size: 20px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.user-info {
+  color: #7f8c8d;
+  font-size: 14px;
+}
+
+.emergency-btn {
+  padding: 8px 16px;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+  margin-right: 15px;
+}
+
+.emergency-btn:hover {
+  background: #c0392b;
+}
+
+.debug-btn {
+  padding: 8px 16px;
+  background: #f39c12;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+  margin-right: 15px;
+}
+
+.debug-btn:hover {
+  background: #e67e22;
+}
+
+.logout-btn {
+  padding: 8px 16px;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.logout-btn:hover {
+  background: #c0392b;
+}
+
+.admin-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 30px;
+}
+
+/* loading overlay 样式 */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(3px);
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.admin-tabs {
+  display: flex;
+  background: white;
+  border-radius: 8px;
+  padding: 5px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #7f8c8d;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.tab-btn.active {
+  background: #3498db;
+  color: white;
+}
+
+.tab-btn:hover:not(.active) {
+  background: #f8f9fa;
+  color: #2c3e50;
+}
+
+.tab-content {
+  background: white;
+  border-radius: 8px;
+  padding: 30px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* 跳过加载按钮样式 */
+.skip-loading-btn {
+  margin-top: 20px;
+  padding: 10px 20px;
+  background: #f39c12;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.skip-loading-btn:hover {
+  background: #e67e22;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .header-content {
+    padding: 15px 20px;
+  }
+
+  .admin-main {
+    padding: 20px 15px;
+  }
+
+  .tab-content {
+    padding: 20px 15px;
+  }
+
+  .admin-tabs {
+    flex-direction: column;
+  }
+
+  .tab-btn {
+    margin-bottom: 5px;
+  }
+}
+</style>
+--- START OF FILE mao_nav-master/README.md ---
+
+# 🐱 猫猫导航 (Mao Nav)
+
+> 一个简洁美观的个人导航网站，支持分类管理和自定义收藏夹
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Vue](https://img.shields.io/badge/Vue-3.5.17-4FC08D?logo=vue.js)](https://vuejs.org/)
+[![Vite](https://img.shields.io/badge/Vite-5.4.10-646CFF?logo=vite)](https://vitejs.dev/)
+[![Cloudflare](https://img.shields.io/badge/Deploy-Cloudflare%20Pages-F38020?logo=cloudflare)](https://pages.cloudflare.com/)
+
+## 🛠️ 更新记录 
+- 2025-07-15 完善logo自动获取流程。
+- 2025-07-16 修复admin 管理后台编辑相关问题，优化编辑逻辑。
+- 2025-07-17 增加网站名称修改，站点logo,修改调整手机端排版。
+- 2025-07-22 增加站点拖拽排序，优化icon获取。
+- 2025-07-30 修复item展示问题，增加环境变量VITE_OPEN_LOCK，配置首页也需验证密码。
+- 2025-08-11 增加夜间模式，增加默认搜索引擎设置功能。
+- 2025-08-20 增加通用部署支持，可通过环境变量自定义前台和后台标题。
+
+## 效果预览
+示例站点: [猫猫导航](https://nav.maodeyu.fun)
+![](preview.png)
+
+## ✨ 特性
+
+- 🎨 **现代化设计** - 简洁美观的界面，支持响应式布局
+- 📱 **多设备适配** - 完美支持桌面端、平板和移动端
+- 🔥 **分类管理** - 支持自定义分类和网站管理
+- ⚡ **快速访问** - 基于 Vue 3 + Vite 构建，加载速度极快
+- 🌐 **免费部署** - 支持 Cloudflare Pages 免费部署
+- 🛠️ **易于定制** - 简单的配置即可个性化你的导航
+- 👨‍💻 **管理界面** - 可选配置管理员界面，支持可视化添加/编辑分类和网站（需要GitHub Token）
+
+
+## 🚀 快速开始
+图文教程可访问[猫猫导航图文教程](https://blog.maodeyu.fun/2025/07/16/nav_mao/)
+### 🚀 部署到 Cloudflare（推荐）
+
+**1. Fork 本项目**
+- 点击页面右上角的 **"Fork"** 按钮
+- 将项目 Fork 到你的 GitHub 账号下
+
+**2. 在 Cloudflare Pages 控制台部署**
+1. 访问 [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. 注册/登录 Cloudflare 账号（免费）
+3. 点击左侧菜单 **"Workers & Pages"**
+4. 点击 **"Create application"** → **"Pages"** → **"Connect to Git"**
+5. 授权 GitHub 并选择你 Fork 的 `mao_nav` 仓库
+6. 配置构建设置：
+   - **Framework preset**: `Vue`
+   - **Build command**: `npm run build`
+   - **Build output directory**: `dist`
+7.（可选）在 **Environment Variables** 里添加你的环境变量（如需用到管理员功能）
+8. 点击 **"Save and Deploy"**
+
+✅ **完成！** 几分钟后你就有了自己的导航网站，每次修改代码都会自动重新部署。
+
+**3. 自定义你的导航**
+- 编辑 `src/mock/mock_data.js` 文件，添加你自己的网站分类和链接
+- 提交更改，Cloudflare 会自动重新部署
+
+**4. 绑定自定义域名（可选）**
+- 在 Cloudflare Pages 项目设置中点击 **"Custom domains"**
+- 添加你的域名并按提示配置 DNS
+
+---
+
+### 🚀 部署到 Vercel
+
+**1. Fork 本项目**
+- 同上，先 Fork 到你的 GitHub 账号
+
+**2. 在 Vercel 控制台部署**
+1. 访问 [Vercel 官网](https://vercel.com/)
+2. 注册/登录 Vercel 账号（免费）
+3. 点击右上角 **"Add New"** → **"Project"**
+4. 选择你 Fork 的 `mao_nav` 仓库，点击 **"Import"**
+5. 保持默认设置，Vercel 会自动检测到是 Vue 项目
+   - **Framework Preset**: `Vite`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+6. （可选）在 **Environment Variables** 里添加你的环境变量（如需用到管理员功能）
+7. 点击 **"Deploy"**
+
+✅ **完成！** 部署成功后会自动生成一个 vercel.app 域名，每次推送代码会自动重新部署。
+
+**3. 自定义你的导航**
+- 编辑 `src/mock/mock_data.js` 文件，添加你自己的网站分类和链接
+- 提交更改，Vercel 会自动重新部署
+
+**4. 绑定自定义域名（可选）**
+- 在 Vercel 项目设置中点击 **"Domains"**
+- 添加你的域名并按提示配置 DNS
+
+### 🛠️ 配置管理员界面（可选）
+
+如果你想使用管理员界面来可视化管理导航数据，可以配置 GitHub Token：
+
+**1. 获取 GitHub Personal Access Token**
+
+1. 访问 [GitHub Settings → Developer settings → Personal access tokens](https://github.com/settings/tokens)
+2. 点击 "Generate new token" → "Generate new token (fine-grained token)"
+3. 设置 Token 名称，选择过期时间，并**只选择你的 mao_nav 仓库**（这样即使 token 泄露也不会影响你其他项目）
+4. 在 **Repository permissions (仓库权限)** 部分，勾选以下权限：
+   - `Contents` - **Read and write** ✅  
+     <span style="color:#888;font-size:13px;">用于读取和修改 <code>src/mock/mock_data.js</code> 文件，这是管理系统的核心功能</span>
+   - `Metadata` - **Read** ✅  
+     <span style="color:#888;font-size:13px;">用于访问仓库基本信息，GitHub API 的基础权限</span>
+5. 在 **Account permissions (账户权限)** 部分：  
+   <span style="color:#888;font-size:13px;">不需要勾选任何账户权限 ❌，我们只操作特定仓库，不需要账户级别的权限</span>
+6. 点击 "Generate token" 并复制生成的 Token（只显示一次）
+
+**2. 配置环境变量**
+
+- **如果你在 _自己的服务器_ 部署：**  
+  在项目根目录创建 `.env` 文件，添加以下配置：
+
+- **如果你使用 _Vercel_ 或 _Cloudflare Pages_ 部署：**  
+  请在对应平台的「环境变量」设置界面，添加下方这些变量，无需在项目中创建 `.env` 文件。
