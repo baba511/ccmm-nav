@@ -346,7 +346,9 @@ const scrollToCategory = (categoryId) => {
 // 检查是否启用锁定功能
 const checkLockStatus = () => {
   const openLock = import.meta.env.VITE_OPEN_LOCK
-  if (openLock && openLock.trim() !== '') {
+  // 核心修改：将值转为字符串并小写，严格判断是否等于 'true'
+  // 这样 'false'、'0'、空值 都不会触发锁定
+  if (String(openLock).toLowerCase() === 'true') {
     isLocked.value = true
     // 检查是否已经解锁过
     const savedUnlock = localStorage.getItem('nav_unlocked')
@@ -354,8 +356,9 @@ const checkLockStatus = () => {
       isUnlocked.value = true
     }
   } else {
+    // 如果不是 'true'，强制设为未锁定
     isLocked.value = false
-    isUnlocked.value = true // 如果没有启用锁定，默认为解锁状态
+    isUnlocked.value = true 
   }
 }
 
