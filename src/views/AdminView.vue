@@ -3,7 +3,7 @@
     <!-- 登录界面 -->
     <div v-if="!isAuthenticated" class="login-container">
       <div class="login-box">
-        <h1>🔐 管理员登录</h1>
+        <h1>🔐 {{ adminPageTitle }}</h1>
         <form @submit.prevent="handleLogin">
           <div class="form-group">
             <label for="password">管理密钥:</label>
@@ -31,7 +31,7 @@
       <!-- 顶部导航 -->
       <header class="admin-header">
         <div class="header-content">
-          <h1>🛠️ {{ adminTitle }}</h1>
+          <h1>🛠️ {{ adminPageTitle }}</h1>
           <div class="header-actions">
             <button @click="emergencyReset" class="emergency-btn" hidden="true">🚨 紧急重置</button>
             <button @click="debugLoadData" class="debug-btn" hidden="true">🔍 调试加载</button>
@@ -119,7 +119,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import CategoryManager from '../components/admin/CategoryManager.vue'
 import SiteManager from '../components/admin/SiteManager.vue'
@@ -140,29 +140,32 @@ const saving = ref(false)
 // 管理界面状态
 const activeTab = ref('categories')
 const categories = ref([])
-const navTitle = ref('猫猫导航') // 保存网站标题
-const selectedCategoryId = ref('') // 用于站点管理的选中分类
+const navTitle = ref('猫猫导航') 
+const selectedCategoryId = ref('') 
 
 // 环境变量配置的标题
-const adminTitle = import.meta.env.VITE_ADMIN_TITLE || '导航站管理'
+const envAdminTitle = import.meta.env.VITE_ADMIN_TITLE
 const envSiteTitle = import.meta.env.VITE_SITE_TITLE
 
-// 紧急兜底：如果5秒后loading还是true，强制重置
+// 计算属性：智能处理后台标题
+// 修复逻辑：如果配置了 VITE_ADMIN_TITLE，就直接用它，不再拼接。
+// 只有在没配置后台标题时，才自动使用 "导航站管理 - 网站名"
+const adminPageTitle = computed(() => {
+  if (envAdminTitle) {
+    return envAdminTitle // 用户自定义了，完全听用户的
+  }
+  // 用户没定义，使用默认格式
+  const siteName = envSiteTitle || navTitle.value || '猫猫导航'
+  return `导航站管理 - ${siteName}`
+})
+
+// 紧急兜底
 setTimeout(() => {
   if (loading.value) {
     console.warn('检测到loading状态异常，强制重置')
     loading.value = false
-    // 确保至少有基本数据
     if (categories.value.length === 0) {
-      categories.value = [
-        {
-          id: 'default',
-          name: '默认分类',
-          icon: '📁',
-          order: 0,
-          sites: []
-        }
-      ]
+      categories.value = [{ id: 'default', name: '默认分类', icon: '📁', order: 0, sites: [] }]
     }
   }
 }, 5000)
@@ -174,10 +177,9 @@ const dialogTitle = ref('')
 const dialogMessage = ref('')
 const dialogDetails = ref([])
 
-// 更新浏览器标题
+// 更新浏览器标题 (Tab上的文字)
 const updateDocTitle = () => {
-  const t = envSiteTitle || navTitle.value || '猫猫导航'
-  document.title = `${adminTitle} - ${t}`
+  document.title = adminPageTitle.value
 }
 
 // 验证管理员密钥
@@ -194,11 +196,6 @@ const handleLogin = async () => {
     if (loginPassword.value === adminPassword) {
       isAuthenticated.value = true
       localStorage.setItem('admin_authenticated', 'true')
-
-      // 登录成功后，不立即加载数据，让用户进入管理界面
-      console.log('登录成功，准备进入管理界面')
-
-      // 延迟加载，避免阻塞登录流程
       setTimeout(async () => {
         try {
           await loadCategories()
@@ -213,7 +210,6 @@ const handleLogin = async () => {
   } catch (error) {
     loginError.value = error.message
   } finally {
-    // 确保登录流程的loading状态被重置
     if (!isAuthenticated.value) {
       loading.value = false
     }
@@ -230,79 +226,45 @@ const logout = () => {
 
 // 调试加载数据
 const debugLoadData = async () => {
-  console.log('=== 开始调试加载数据 ===')
-  console.log('当前环境变量:', {
-    VITE_GITHUB_TOKEN: import.meta.env.VITE_GITHUB_TOKEN ? '已配置' : '未配置',
-    VITE_GITHUB_OWNER: import.meta.env.VITE_GITHUB_OWNER,
-    VITE_GITHUB_REPO: import.meta.env.VITE_GITHUB_REPO,
-    VITE_GITHUB_BRANCH: import.meta.env.VITE_GITHUB_BRANCH
-  })
-
   try {
-    console.log('直接调用loadCategoriesFromGitHub...')
     const data = await loadCategoriesFromGitHub()
-    console.log('调用成功，返回数据:', data)
-
-    showDialog(
-      'success',
-      '🎉 调试成功',
-      '直接调用GitHub API成功',
-      [`• 数据类型: ${typeof data}`, `• 包含categories: ${!!data.categories}`, `• 分类数量: ${data.categories?.length || 0}`]
-    )
+    showDialog('success', '🎉 调试成功', '直接调用GitHub API成功', [`数据分类数: ${data.categories?.length || 0}`])
   } catch (error) {
-    console.error('直接调用失败:', error)
-    showDialog(
-      'error',
-      '❌ 调试失败',
-      '直接调用GitHub API失败',
-      [`• 错误信息: ${error.message}`, `• 错误类型: ${error.constructor.name}`]
-    )
+    showDialog('error', '❌ 调试失败', error.message)
   }
 }
 
-// 加载分类数据（简化版本，暂时只加载本地数据）
+// 加载分类数据
 const loadCategories = async () => {
-  console.log('🔍 开始加载分类数据（简化版本）')
   loading.value = true
-
   try {
-    // 直接加载本地数据，避免GitHub API调用
     const { mockData } = await import('../mock/mock_data.js')
     categories.value = mockData.categories || []
     navTitle.value = mockData.title || '猫猫导航'
-    updateDocTitle() // 加载数据后更新标题
-    console.log('✅ 本地数据加载成功，分类数量:', categories.value.length)
+    updateDocTitle() 
   } catch (error) {
-    console.error('❌ 本地数据加载失败:', error)
-    // 最后兜底：使用空数组
     categories.value = []
     navTitle.value = '猫猫导航'
     updateDocTitle()
   } finally {
-    // 确保loading状态被重置
     loading.value = false
-    console.log('🔍 数据加载完成，loading状态重置')
   }
 }
 
-// 处理分类更新
 const handleCategoriesUpdate = (newCategories) => {
   categories.value = newCategories
 }
 
-// 切换到站点管理并选中对应分类
 const switchToSiteManager = (categoryId) => {
   selectedCategoryId.value = categoryId
   activeTab.value = 'sites'
 }
 
-// 手动切换到站点管理标签
 const switchToSiteTab = () => {
-  selectedCategoryId.value = '' // 清空选中分类，显示所有站点
+  selectedCategoryId.value = '' 
   activeTab.value = 'sites'
 }
 
-// 显示弹框
 const showDialog = (type, title, message, details = []) => {
   dialogType.value = type
   dialogTitle.value = title
@@ -311,142 +273,57 @@ const showDialog = (type, title, message, details = []) => {
   dialogVisible.value = true
 }
 
-// 关闭弹框
 const closeDialog = () => {
   dialogVisible.value = false
 }
 
-// 跳过加载
 const skipLoading = async () => {
-  console.log('用户选择跳过加载')
   loading.value = false
-
-  // 尝试加载本地数据
   try {
     const { mockData } = await import('../mock/mock_data.js')
     categories.value = mockData.categories || []
     navTitle.value = mockData.title || '猫猫导航'
-    updateDocTitle()
-    console.log('跳过加载后，使用本地数据:', categories.value.length)
   } catch (error) {
-    console.error('跳过加载时，本地数据加载失败:', error)
-    // 最基本的兜底数据
-    categories.value = [
-      {
-        id: 'default',
-        name: '默认分类',
-        icon: '📁',
-        order: 0,
-        sites: []
-      }
-    ]
-    navTitle.value = '猫猫导航'
-    updateDocTitle()
+    categories.value = [{ id: 'default', name: '默认分类', icon: '📁', order: 0, sites: [] }]
   }
-
-  showDialog(
-    'info',
-    '⏭️ 已跳过加载',
-    '已跳过GitHub数据加载，当前使用本地数据',
-    [`• 分类数量: ${categories.value.length}`, `• 可在系统设置中重新尝试连接GitHub`]
-  )
+  updateDocTitle()
 }
 
-// 保存到GitHub
 const saveToGitHub = async () => {
   saving.value = true
   try {
-    // 保存完整的数据结构，包括title字段
     await saveCategoriesToGitHub({
       categories: categories.value,
       title: navTitle.value
     })
-    showDialog(
-      'success',
-      '🎉 保存成功',
-      '您的更改已成功保存到GitHub仓库！',
-      [
-        '• 更改将在 2-3 分钟内自动部署到线上',
-        '• 部署完成后，您可以在前台页面看到最新内容',
-        '• 如有问题，请检查Vercel或CFpage是否触发自动部署'
-      ]
-    )
+    showDialog('success', '🎉 保存成功', '您的更改已成功保存到GitHub仓库！', ['• 更改将在 2-3 分钟内自动部署到线上'])
   } catch (error) {
-    showDialog(
-      'error',
-      '❌ 保存失败',
-      '保存过程中发生错误，请重试',
-      [`• 错误详情: ${error.message}`]
-    )
+    showDialog('error', '❌ 保存失败', '保存过程中发生错误', [`• 详情: ${error.message}`])
   } finally {
     saving.value = false
   }
 }
 
-// 紧急重置加载状态
 const emergencyReset = () => {
-  console.log('用户点击紧急重置按钮，强制重置loading状态')
   loading.value = false
-  // 强制DOM更新，确保loading状态同步到模板
-  setTimeout(() => {
-    console.log('🔍 延迟检查loading状态:', loading.value)
-    console.log('🔍 DOM中loading元素:', document.querySelector('.loading-overlay'))
-    console.log('🔍 DOM中tab按钮:', document.querySelectorAll('.tab-btn'))
-
-    // 如果loading overlay仍然存在，强制隐藏
-    const loadingOverlay = document.querySelector('.loading-overlay')
-    if (loadingOverlay) {
-      console.warn('🔍 发现loading overlay仍然存在，强制隐藏')
-      loadingOverlay.style.display = 'none'
-    }
-  }, 100)
-  showDialog(
-    'info',
-    '⚠️ 加载状态已重置',
-    '已强制重置加载状态，请刷新页面查看效果。',
-    []
-  )
+  const loadingOverlay = document.querySelector('.loading-overlay')
+  if (loadingOverlay) loadingOverlay.style.display = 'none'
 }
 
-// 组件挂载时检查认证状态
 onMounted(() => {
-  console.log('🔍 AdminView组件开始挂载')
-  
-  // 初始设置标题
   updateDocTitle()
-
-  // 立即强制重置loading状态，避免卡死
   loading.value = false
-
   const savedAuth = localStorage.getItem('admin_authenticated')
   if (savedAuth === 'true') {
-    console.log('🔍 检测到已登录状态')
     isAuthenticated.value = true
-
-    // 直接使用本地数据，不调用GitHub API
-    console.log('🔍 直接加载本地数据，跳过GitHub API调用')
-    try {
-      // 使用同步方式加载本地数据
-      import('../mock/mock_data.js').then(({ mockData }) => {
-        categories.value = mockData.categories || []
-        navTitle.value = mockData.title || '猫猫导航'
-        updateDocTitle() // 加载数据后更新标题
-        console.log('🔍 本地数据加载成功，分类数量:', categories.value.length)
-      }).catch(error => {
-        console.error('🔍 本地数据加载失败:', error)
-        categories.value = []
-        navTitle.value = '猫猫导航'
-        updateDocTitle()
-      })
-    } catch (error) {
-      console.error('🔍 数据加载异常:', error)
-      categories.value = []
-      navTitle.value = '猫猫导航'
+    import('../mock/mock_data.js').then(({ mockData }) => {
+      categories.value = mockData.categories || []
+      navTitle.value = mockData.title || '猫猫导航'
       updateDocTitle()
-    }
+    }).catch(() => {
+      categories.value = []
+    })
   }
-
-  console.log('🔍 AdminView组件挂载完成')
 })
 </script>
 
