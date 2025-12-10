@@ -130,36 +130,28 @@ import { useGitHubAPI } from '../apis/useGitHubAPI.js'
 const router = useRouter()
 const { saveCategoriesToGitHub, loadCategoriesFromGitHub } = useGitHubAPI()
 
-// 认证状态
 const isAuthenticated = ref(false)
 const loginPassword = ref('')
 const loginError = ref('')
 const loading = ref(false)
 const saving = ref(false)
 
-// 管理界面状态
 const activeTab = ref('categories')
 const categories = ref([])
 const navTitle = ref('猫猫导航') 
 const selectedCategoryId = ref('') 
 
-// 环境变量配置的标题
 const envAdminTitle = import.meta.env.VITE_ADMIN_TITLE
-const envSiteTitle = import.meta.env.VITE_SITE_TITLE
+const envSiteTitle = import.meta.env.VITE_SITE_TITLE || import.meta.env.VITE_SITE_NAME
 
-// 计算属性：智能处理后台标题
-// 修复逻辑：如果配置了 VITE_ADMIN_TITLE，就直接用它，不再拼接。
-// 只有在没配置后台标题时，才自动使用 "导航站管理 - 网站名"
 const adminPageTitle = computed(() => {
   if (envAdminTitle) {
-    return envAdminTitle // 用户自定义了，完全听用户的
+    return envAdminTitle 
   }
-  // 用户没定义，使用默认格式
   const siteName = envSiteTitle || navTitle.value || '猫猫导航'
   return `导航站管理 - ${siteName}`
 })
 
-// 紧急兜底
 setTimeout(() => {
   if (loading.value) {
     console.warn('检测到loading状态异常，强制重置')
@@ -170,29 +162,22 @@ setTimeout(() => {
   }
 }, 5000)
 
-// 自定义弹框状态
 const dialogVisible = ref(false)
 const dialogType = ref('success')
 const dialogTitle = ref('')
 const dialogMessage = ref('')
 const dialogDetails = ref([])
 
-// 更新浏览器标题 (Tab上的文字)
 const updateDocTitle = () => {
   document.title = adminPageTitle.value
 }
 
-// 验证管理员密钥
 const handleLogin = async () => {
   loading.value = true
   loginError.value = ''
-
   try {
     const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD
-    if (!adminPassword) {
-      throw new Error('管理密钥未配置，请配置环境变量')
-    }
-
+    if (!adminPassword) throw new Error('管理密钥未配置，请配置环境变量')
     if (loginPassword.value === adminPassword) {
       isAuthenticated.value = true
       localStorage.setItem('admin_authenticated', 'true')
@@ -200,7 +185,6 @@ const handleLogin = async () => {
         try {
           await loadCategories()
         } catch (error) {
-          console.error('登录后数据加载失败:', error)
           loading.value = false
         }
       }, 500)
@@ -210,13 +194,10 @@ const handleLogin = async () => {
   } catch (error) {
     loginError.value = error.message
   } finally {
-    if (!isAuthenticated.value) {
-      loading.value = false
-    }
+    if (!isAuthenticated.value) loading.value = false
   }
 }
 
-// 退出登录
 const logout = () => {
   isAuthenticated.value = false
   localStorage.removeItem('admin_authenticated')
@@ -224,7 +205,6 @@ const logout = () => {
   router.push('/')
 }
 
-// 调试加载数据
 const debugLoadData = async () => {
   try {
     const data = await loadCategoriesFromGitHub()
@@ -234,7 +214,6 @@ const debugLoadData = async () => {
   }
 }
 
-// 加载分类数据
 const loadCategories = async () => {
   loading.value = true
   try {
@@ -333,7 +312,6 @@ onMounted(() => {
   background: #2c3e50;
 }
 
-/* 登录界面样式 */
 .login-container {
   display: flex;
   align-items: center;
@@ -415,7 +393,6 @@ onMounted(() => {
   font-size: 14px;
 }
 
-/* 管理界面样式 */
 .admin-dashboard {
   min-height: 100vh;
   background: #f5f7fa;
@@ -496,6 +473,7 @@ onMounted(() => {
   cursor: pointer;
   font-size: 14px;
   transition: background-color 0.3s ease;
+  margin-right: 15px;
 }
 
 .logout-btn:hover {
@@ -508,7 +486,6 @@ onMounted(() => {
   padding: 30px;
 }
 
-/* loading overlay 样式 */
 .loading-overlay {
   position: fixed;
   top: 0;
@@ -589,7 +566,6 @@ onMounted(() => {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
-/* 跳过加载按钮样式 */
 .skip-loading-btn {
   margin-top: 20px;
   padding: 10px 20px;
@@ -606,24 +582,19 @@ onMounted(() => {
   background: #e67e22;
 }
 
-/* 响应式设计 */
 @media (max-width: 768px) {
   .header-content {
     padding: 15px 20px;
   }
-
   .admin-main {
     padding: 20px 15px;
   }
-
   .tab-content {
     padding: 20px 15px;
   }
-
   .admin-tabs {
     flex-direction: column;
   }
-
   .tab-btn {
     margin-bottom: 5px;
   }
